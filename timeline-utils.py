@@ -10,6 +10,7 @@
 
 """
 
+import bisect
 import csv
 import gpxpy
 import gpxpy.gpx
@@ -220,6 +221,42 @@ def gettext(nodelist):
             value.append(node.data)
     return ''.join(value)
 
+def readcsv(infile: str):
+    """
+    Read csv file
+
+    input: infile
+    output: a list of the location point: [time, latitude, longitude]    
+    """
+    # check if infile with extention '.csv'
+    filename = os.path.basename(os.path.abspath(infile))
+    fname, ext = os.path.splitext(filename)
+    if ext != '.csv':
+        print(f"!!! exiting with code 98 -- Looks like {infile} is not a CSV file !!!")
+        sys.exit(98)
+
+    # read the csv file
+    with open(infile, 'r', newline='') as f:
+        # Create a CSV reader object
+        csv_reader = csv.reader(f)
+        # Read the header row
+        headers = next(csv_reader)
+        print(f"Headers of CSV:")
+        print(f"    {headers}")
+        # Find index of latitude, longitude and time
+        hindex = findgpxindex(headers)
+        print(f"\nMapping of header:")
+        print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
+        # Create points list from CSV data rows
+        points = []
+        for row in csv_reader:
+            lat = row[hindex['latitude']]
+            lon = row[hindex['longitude']]
+            time = row[hindex['time']]
+            points.append([time, lat, lon])
+
+    return points
+
 @app.command()
 def gpx2csv(infile: str, csvdir: str='__GPX2CSV'):
     """
@@ -307,6 +344,47 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
         create_gpx_file(points, outfile)
         print(f"Created {outfile}")
 
+@app.command()
+def search_csv(time: str, infile: str):
+    """
+    Search closest time in CSV file/folder
+
+    input: time - timestamp to search
+           infile - name of to search file
+    output: a list of 2 points
+
+    """
+
+    ts = datetime.fromisoformat(time)
+    points = readcsv(infile)
+    idx = bisect.bisect_left([datetime.fromisoformat(item[0]) for item in points], ts)
+
+    # find the elements around the insertion point
+    matches = []
+    if idx > 0:
+        matches.append(points[idx - 1])
+    if idx < len(points):
+        matches.append(points[idx])
+
+    # determine the truly closest match
+    if len(matches) == 1:
+        best = 0
+        second = None
+    elif len(matches) == 2:
+        diff1 = abs((datetime.fromisoformat(matches[0][0]) - ts).total_seconds())
+        diff2 = abs((datetime.fromisoformat(matches[1][0]) - ts).total_seconds())
+        best = 0 if diff1 < diff2 else 1
+        second = 1 if diff1 < diff2 else 0
+    else:
+        best = second = None
+
+    # output
+    if best != None:
+        print(f"\nBest match for {time} is {matches[best]}\n")
+    if second != None:
+        print(f"\n2nd best match for {time} is {matches[second]}\n")
+    if best == None and second == None:
+        print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
