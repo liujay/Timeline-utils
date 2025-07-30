@@ -322,27 +322,12 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
     outdir = f"{dirname}/{gpxdir}"      
     os.makedirs(outdir, exist_ok=True)
     outfile = f"{outdir}/{fname}.gpx"
-    with open(infile, 'r', newline='') as f:
-        # Create a CSV reader object
-        csv_reader = csv.reader(f)
-        # Read the header row
-        headers = next(csv_reader)
-        print(f"Headers of CSV:")
-        print(f"    {headers}")
-        # Find index of latitude, longitude and time
-        hindex = findgpxindex(headers)
-        print(f"\nMapping of header:")
-        print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
-        # Create points list from CSV data rows
-        points = []
-        for row in csv_reader:
-            lat = row[hindex['latitude']]
-            lon = row[hindex['longitude']]
-            time = row[hindex['time']]
-            points.append([time, lat, lon])
-        # Create GPX file from points
-        create_gpx_file(points, outfile)
-        print(f"Created {outfile}")
+
+    # read csv file
+    points = readcsv(infile)
+    # create GPX file from points
+    create_gpx_file(points, outfile)
+    print(f"Created {outfile}")
 
 @app.command()
 def search_csv(time: str, infile: str):
