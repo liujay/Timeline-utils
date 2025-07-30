@@ -357,7 +357,7 @@ def search_csv(time: str, infile: str):
 
     ts = datetime.fromisoformat(time)
     points = readcsv(infile)
-    idx = bisect.bisect_left([datetime.fromisoformat(item[0]) for item in points], ts)
+    idx = bisect.bisect_left(points, ts, key=lambda p: datetime.fromisoformat(p[0]))
 
     # find the elements around the insertion point
     matches = []
@@ -379,10 +379,11 @@ def search_csv(time: str, infile: str):
         best = second = None
 
     # output
+    print(f"\n*** Search {time} in file {infile} ***")
     if best != None:
-        print(f"\nBest match for {time} is {matches[best]}\n")
+        print(f"\nBest match is\n    {matches[best]}\n")
     if second != None:
-        print(f"\n2nd best match for {time} is {matches[second]}\n")
+        print(f"\n2nd best match is\n    {matches[second]}\n")
     if best == None and second == None:
         print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
 
