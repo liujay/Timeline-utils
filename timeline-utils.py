@@ -335,15 +335,30 @@ def search_csv(time: str, infile: str):
     Search closest time in CSV file/folder
 
     input: time - timestamp to search
-           infile - name of to search file
+           infile - name of file/folder to search
     output: a list of 2 points
 
     """
 
     ts = datetime.fromisoformat(time)
-    points = readcsv(infile)
-    idx = bisect.bisect_left(points, ts, key=lambda p: datetime.fromisoformat(p[0]))
+    if os.path.isdir(infile):
+        date = ts.strftime("%Y-%m-%d")
+        file = f"{infile}/{date}.csv"
+        if os.path.exists(file):
+            print(f"\n*** Search {time} in file {file} ***\n")
+            points = readcsv(file)
+        else:
+            print(f"!!! File {file} does not exist in folder {infile} !!!")
+            print(f"    You must specify a specific file")
+            sys.exit(97)
+    else:
+        file = infile
+        print(f"\n*** Search {time} in file {file} ***\n")
+        points = readcsv(file)
 
+    # bisect search
+    #
+    idx = bisect.bisect_left(points, ts, key=lambda p: datetime.fromisoformat(p[0]))
     # find the elements around the insertion point
     matches = []
     if idx > 0:
@@ -364,7 +379,6 @@ def search_csv(time: str, infile: str):
         best = second = None
 
     # output
-    print(f"\n*** Search {time} in file {infile} ***")
     if best != None:
         print(f"\nBest match is\n    {matches[best]}\n")
     if second != None:
@@ -401,19 +415,17 @@ def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
     # export to specified file formats
     for date, points in date_points.items():
         # sort points list first
-        #   sort by key 'time' that lives in [0]
+        #   sort by key 'time' that lives in [0], ie, time
         points.sort(key=itemgetter(0))
-        # Convert date format to dd-mm-yyyy
-        formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
         # export to different formats
         if csv:
             # setup headers for csv file
             headers = ['Time', 'Latitude', 'Longitude', 'Tag', 'Info']
-            csvfile = os.path.join(csvdir, f"{formatted_date}.csv")
+            csvfile = os.path.join(csvdir, f"{date}.csv")
             create_csv_file(points, csvfile, headers)
             print(f"Created: {csvfile}")
         if gpx:
-            gpxfile = os.path.join(gpxdir, f"{formatted_date}.gpx")
+            gpxfile = os.path.join(gpxdir, f"{date}.gpx")
             create_gpx_file(points, gpxfile)
             print(f"Created: {gpxfile}")
 
