@@ -10,6 +10,7 @@
 
 """
 
+import bisect
 import csv
 import gpxpy
 import gpxpy.gpx
@@ -220,6 +221,42 @@ def gettext(nodelist):
             value.append(node.data)
     return ''.join(value)
 
+def readcsv(infile: str):
+    """
+    Read csv file
+
+    input: infile
+    output: a list of the location point: [time, latitude, longitude]    
+    """
+    # check if infile with extention '.csv'
+    filename = os.path.basename(os.path.abspath(infile))
+    fname, ext = os.path.splitext(filename)
+    if ext != '.csv':
+        print(f"!!! exiting with code 98 -- Looks like {infile} is not a CSV file !!!")
+        sys.exit(98)
+
+    # read the csv file
+    with open(infile, 'r', newline='') as f:
+        # Create a CSV reader object
+        csv_reader = csv.reader(f)
+        # Read the header row
+        headers = next(csv_reader)
+        print(f"Headers of CSV:")
+        print(f"    {headers}")
+        # Find index of latitude, longitude and time
+        hindex = findgpxindex(headers)
+        print(f"\nMapping of header:")
+        print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
+        # Create points list from CSV data rows
+        points = []
+        for row in csv_reader:
+            lat = row[hindex['latitude']]
+            lon = row[hindex['longitude']]
+            time = row[hindex['time']]
+            points.append([time, lat, lon])
+
+    return points
+
 @app.command()
 def gpx2csv(infile: str, csvdir: str='__GPX2CSV'):
     """
@@ -285,28 +322,69 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
     outdir = f"{dirname}/{gpxdir}"      
     os.makedirs(outdir, exist_ok=True)
     outfile = f"{outdir}/{fname}.gpx"
-    with open(infile, 'r', newline='') as f:
-        # Create a CSV reader object
-        csv_reader = csv.reader(f)
-        # Read the header row
-        headers = next(csv_reader)
-        print(f"Headers of CSV:")
-        print(f"    {headers}")
-        # Find index of latitude, longitude and time
-        hindex = findgpxindex(headers)
-        print(f"\nMapping of header:")
-        print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
-        # Create points list from CSV data rows
-        points = []
-        for row in csv_reader:
-            lat = row[hindex['latitude']]
-            lon = row[hindex['longitude']]
-            time = row[hindex['time']]
-            points.append([time, lat, lon])
-        # Create GPX file from points
-        create_gpx_file(points, outfile)
-        print(f"Created {outfile}")
 
+    # read csv file
+    points = readcsv(infile)
+    # create GPX file from points
+    create_gpx_file(points, outfile)
+    print(f"Created {outfile}")
+
+@app.command()
+def search_csv(time: str, infile: str):
+    """
+    Search closest time in CSV file/folder
+
+    input: time - timestamp to search
+           infile - name of file/folder to search
+    output: a list of 2 points
+
+    """
+
+    ts = datetime.fromisoformat(time)
+    if os.path.isdir(infile):
+        date = ts.strftime("%Y-%m-%d")
+        file = f"{infile}/{date}.csv"
+        if os.path.exists(file):
+            print(f"\n*** Search {time} in file {file} ***\n")
+            points = readcsv(file)
+        else:
+            print(f"!!! File {file} does not exist in folder {infile} !!!")
+            print(f"    You must specify a specific file")
+            sys.exit(97)
+    else:
+        file = infile
+        print(f"\n*** Search {time} in file {file} ***\n")
+        points = readcsv(file)
+
+    # bisect search
+    #
+    idx = bisect.bisect_left(points, ts, key=lambda p: datetime.fromisoformat(p[0]))
+    # find the elements around the insertion point
+    matches = []
+    if idx > 0:
+        matches.append(points[idx - 1])
+    if idx < len(points):
+        matches.append(points[idx])
+
+    # determine the truly closest match
+    if len(matches) == 1:
+        best = 0
+        second = None
+    elif len(matches) == 2:
+        diff1 = abs((datetime.fromisoformat(matches[0][0]) - ts).total_seconds())
+        diff2 = abs((datetime.fromisoformat(matches[1][0]) - ts).total_seconds())
+        best = 0 if diff1 < diff2 else 1
+        second = 1 if diff1 < diff2 else 0
+    else:
+        best = second = None
+
+    # output
+    if best != None:
+        print(f"\nBest match is\n    {matches[best]}\n")
+    if second != None:
+        print(f"\n2nd best match is\n    {matches[second]}\n")
+    if best == None and second == None:
+        print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
@@ -337,19 +415,17 @@ def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
     # export to specified file formats
     for date, points in date_points.items():
         # sort points list first
-        #   sort by key 'time' that lives in [0]
+        #   sort by key 'time' that lives in [0], ie, time
         points.sort(key=itemgetter(0))
-        # Convert date format to dd-mm-yyyy
-        formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
         # export to different formats
         if csv:
             # setup headers for csv file
             headers = ['Time', 'Latitude', 'Longitude', 'Tag', 'Info']
-            csvfile = os.path.join(csvdir, f"{formatted_date}.csv")
+            csvfile = os.path.join(csvdir, f"{date}.csv")
             create_csv_file(points, csvfile, headers)
             print(f"Created: {csvfile}")
         if gpx:
-            gpxfile = os.path.join(gpxdir, f"{formatted_date}.gpx")
+            gpxfile = os.path.join(gpxdir, f"{date}.gpx")
             create_gpx_file(points, gpxfile)
             print(f"Created: {gpxfile}")
 
