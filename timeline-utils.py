@@ -16,16 +16,51 @@ import gpxpy
 import gpxpy.gpx
 import os
 import json
+import piexif
 import sys
 import typer
 from datetime import datetime
 from operator import itemgetter
+from PIL import Image
 from xml.dom import minidom
 
 app = typer.Typer()
 
 # sematic keys of interest
 semantickeys = ['activity', 'timelineMemory', 'timelinePath', 'visit', 'noMatch']
+codec = 'ISO-8859-1'
+
+def exifId_to_tag(exif_dict):
+    """
+    convert input a number-labeled dictionary to a
+        name-labeled dictionary, eg
+            exif_dict['GPS'][1] --> exif_tag_dict['GPS']['GPSLatitudeRef']
+            exif_dict['GPS'][2] --> exif_tag_dict['GPS']['GPSLatitude']
+
+        input: exif_dict -- a exif dict
+        output: a name/tag exif dict
+
+    """
+    exif_tag_dict = {}
+    thumbnail = exif_dict.pop('thumbnail', None)
+    if thumbnail:
+        exif_tag_dict['thumbnail'] = thumbnail.decode(codec)
+    #
+    #   Converting id to name/tag
+    for ifd in exif_dict:
+        exif_tag_dict[ifd] = {}
+        for tag in exif_dict[ifd]:
+            try:
+                element = exif_dict[ifd][tag].decode(codec)
+            except AttributeError:
+                element = exif_dict[ifd][tag]
+            exif_tag_dict[ifd][piexif.TAGS[ifd][tag]["name"]] = element
+    #   lets skip ['Exif']['MakerNote'] which may 
+    #       contain nusty byte data from different Makers
+    makernote = exif_tag_dict['Exif'].pop('MakerNote', None)
+    if makernote:
+        print(f"\n!!! Skipping [Exif][MakerNote] !!!\n")
+    return exif_tag_dict
 
 def create_csv_file(points, outfile, headers):
     """
@@ -332,7 +367,7 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
 @app.command()
 def search_csv(time: str, infile: str):
     """
-    Search closest time in CSV file/folder
+    Search closest gps info for specified time in a CSV file/folder
 
     input: time - timestamp to search
            infile - name of file/folder to search
@@ -342,6 +377,8 @@ def search_csv(time: str, infile: str):
 
     ts = datetime.fromisoformat(time)
     if os.path.isdir(infile):
+        # infile is a folder --
+        #   search in the specified folder with proper {date} csv
         date = ts.strftime("%Y-%m-%d")
         file = f"{infile}/{date}.csv"
         if os.path.exists(file):
@@ -352,6 +389,7 @@ def search_csv(time: str, infile: str):
             print(f"    You must specify a specific file")
             sys.exit(97)
     else:
+        # infile is a proper file
         file = infile
         print(f"\n*** Search {time} in file {file} ***\n")
         points = readcsv(file)
@@ -385,6 +423,44 @@ def search_csv(time: str, infile: str):
         print(f"\n2nd best match is\n    {matches[second]}\n")
     if best == None and second == None:
         print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
+
+@app.command()
+def image_search(imagefile: str, infolder: str, timezone: str):
+    """
+    Search closest gps info of a {exif-timestamped} image in a CSV folder
+
+    input: imagefile - name of the timestamped image
+           infolder - name of folder containing location CSV files
+    output: a list of 1/2 closet points
+
+    """
+    #
+    #   get exif info from the image
+    im = Image.open(imagefile)
+    exif_dict = piexif.load(im.info.get('exif'))
+    # convert id based exif_dict to name/tag based exif_dict
+    exif_dict = exifId_to_tag(exif_dict)
+    #   get timestamp of the image
+    if 'DateTime' in exif_dict['0th']:
+        _timestamp = exif_dict['0th']['DateTime']
+    elif 'DateTimeOriginal' in exif_dict['Exif']:
+        _timestamp = exif_dict['Exit']['DateTimeOriginal']
+    elif 'DateTime' in exif_dict['1st']:
+        _timestamp = exif_dict['1st']['DateTime']
+    else:
+        print('\n!!! No timestamp found in image file {imagefile} !!!\n')
+        sys.exit(99)
+    #
+    #   convert exif timestamp to python datetime timestamp
+    zoneTs = f"{_timestamp}{timezone}"
+    fmt = "%Y:%m:%d %H:%M:%S%z"
+    timestamp = datetime.strptime(zoneTs, fmt).isoformat()
+    #
+    #   search/get gps info from the
+    #       timestamp and infolder
+    print(f"--- imagefile {imagefile}")
+    print(f"      tagged with timestamp {_timestamp}")
+    search_csv(timestamp, infolder)
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
