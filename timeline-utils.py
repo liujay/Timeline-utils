@@ -256,7 +256,7 @@ def gettext(nodelist):
             value.append(node.data)
     return ''.join(value)
 
-def readcsv(infile: str):
+def readcsv(infile: str, info: bool=True):
     """
     Read csv file
 
@@ -276,12 +276,14 @@ def readcsv(infile: str):
         csv_reader = csv.reader(f)
         # Read the header row
         headers = next(csv_reader)
-        print(f"Headers of CSV:")
-        print(f"    {headers}")
+        if info:
+            print(f"Headers of CSV:")
+            print(f"    {headers}")
         # Find index of latitude, longitude and time
         hindex = findgpxindex(headers)
-        print(f"\nMapping of header:")
-        print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
+        if info:
+            print(f"\nMapping of header:")
+            print(f"    latitude:{hindex['latitude']}, longitude:{hindex['longitude']}, time:{hindex['time']}\n")
         # Create points list from CSV data rows
         points = []
         for row in csv_reader:
@@ -365,7 +367,7 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
     print(f"Created {outfile}")
 
 @app.command()
-def search_csv(time: str, infile: str):
+def search_csv(time: str, infile: str, info: bool=True):
     """
     Search closest gps info for specified time in a CSV file/folder
 
@@ -382,8 +384,8 @@ def search_csv(time: str, infile: str):
         date = ts.strftime("%Y-%m-%d")
         file = f"{infile}/{date}.csv"
         if os.path.exists(file):
-            print(f"\n*** Search {time} in file {file} ***\n")
-            points = readcsv(file)
+            print(f"\n--- Search {time} in file {file}")
+            points = readcsv(file, info)
         else:
             print(f"!!! File {file} does not exist in folder {infile} !!!")
             print(f"    You must specify a specific file")
@@ -391,8 +393,8 @@ def search_csv(time: str, infile: str):
     else:
         # infile is a proper file
         file = infile
-        print(f"\n*** Search {time} in file {file} ***\n")
-        points = readcsv(file)
+        print(f"\n--- Search {time} in file {file}")
+        points = readcsv(file, info)
 
     # bisect search
     #
@@ -441,12 +443,16 @@ def image_search(imagefile: str, infolder: str, timezone: str):
     # convert id based exif_dict to name/tag based exif_dict
     exif_dict = exifId_to_tag(exif_dict)
     #   get timestamp of the image
+    tsSource = None
     if 'DateTime' in exif_dict['0th']:
         _timestamp = exif_dict['0th']['DateTime']
+        tsSource = '0th, Datetime'
     elif 'DateTimeOriginal' in exif_dict['Exif']:
         _timestamp = exif_dict['Exit']['DateTimeOriginal']
+        tsSource = 'Exit DataTimeOriginal'
     elif 'DateTime' in exif_dict['1st']:
         _timestamp = exif_dict['1st']['DateTime']
+        tsSource = '1st DataTime'
     else:
         print('\n!!! No timestamp found in image file {imagefile} !!!\n')
         sys.exit(99)
@@ -459,8 +465,9 @@ def image_search(imagefile: str, infolder: str, timezone: str):
     #   search/get gps info from the
     #       timestamp and infolder
     print(f"--- imagefile {imagefile}")
-    print(f"      tagged with timestamp {_timestamp}")
-    search_csv(timestamp, infolder)
+    print(f"      tagged with timestamp: {_timestamp}")
+    print(f"             from exif dict: {tsSource}")
+    search_csv(timestamp, infolder, False)
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
