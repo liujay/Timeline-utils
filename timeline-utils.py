@@ -368,14 +368,13 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
     create_gpx_file(points, outfile)
     print(f"Created {outfile}")
 
-@app.command()
-def search_csv(time: str, infile: str, info: bool=True, printcmd: bool=False):
+def time_search(time: str, infile: str, info: bool=True):
     """
     Search closest gps info for specified time in a CSV file/folder
 
     input: time - timestamp to search
            infile - name of file/folder to search
-    output: a list of 2 points
+    output: 2 closest points
 
     """
 
@@ -412,40 +411,50 @@ def search_csv(time: str, infile: str, info: bool=True, printcmd: bool=False):
     if len(matches) == 1:
         best = 0
         second = None
+        return matches[best], None
     elif len(matches) == 2:
         diff1 = abs((datetime.fromisoformat(matches[0][0]) - ts).total_seconds())
         diff2 = abs((datetime.fromisoformat(matches[1][0]) - ts).total_seconds())
         best = 0 if diff1 < diff2 else 1
         second = 1 if diff1 < diff2 else 0
+        return matches[best], matches[second]
     else:
         best = second = None
+        return None, None
 
+def print_search_results(best, second):
+    """
+    
+    """
     # output
     if best != None:
         # unpack points
-        time_1st, lat_1st, lon_1st = matches[best]
+        time_1st, lat_1st, lon_1st = best
+        print()
         print(f"    Best match: {time_1st}")
         print(f"                    -- {lat_1st} {lon_1st}")
     if second != None:
-        time_2nd, lat_2nd, lon_2nd = matches[second]
+        time_2nd, lat_2nd, lon_2nd = second
         print(f"    2nd  match: {time_2nd}")
         print(f"                    -- {lat_2nd} {lon_2nd}")
-
-    if printcmd:
-        if best != None:
-            cmd1 = f"{cmd_add_gpsdata} --imagefile {infile} -- {lat_1st} {lon_1st}"
-            print(f"    #   cmd to add_gapdata to image file with best match")
-            print(f"{cmd1}")
-        if second != None:
-            cmd2 = f"{cmd_add_gpsdata} --imagefile {infile} -- {lat_2nd} {lon_2nd}"
-            print(f"    #   cmd to add_gapdata to image file with 2nd best match")
-            print(f"{cmd2}")
-
     if best == None and second == None:
         print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
+    
+@app.command()
+def search_csv(time: str, infile: str, info: bool=True):
+    """
+    Search closest gps info for specified time in a CSV file/folder
+
+    input: time - timestamp to search
+           infile - name of file/folder to search
+    output: a list of 2 points
+
+    """
+    best, second = time_search(time, infile, info)
+    print_search_results(best, second)
 
 @app.command()
-def image_search(imagefile: str, infolder: str, timezone: str):
+def image_search(imagefile: str, infolder: str, timezone: str, printcmd: bool=True):
     """
     Search closest gps info of a {exif-timestamped} image in a CSV folder
 
@@ -486,8 +495,19 @@ def image_search(imagefile: str, infolder: str, timezone: str):
     print(f"      tagged with timestamp: {_timestamp}")
     print(f"             from exif dict: {tsSource}")
     info = False
-    printcmd = True
-    search_csv(timestamp, infolder, info, printcmd)
+    best, second = time_search(timestamp, infolder, info)
+    print_search_results(best, second)
+    if printcmd:
+        if best != None:
+            _time, lat_1st, lon_1st = best
+            cmd1 = f"{cmd_add_gpsdata} --imagefile {imagefile} -- {lat_1st} {lon_1st}"
+            print(f"\n    #   cmd to add_gapdata to image file with best match")
+            print(f"{cmd1}")
+        if second != None:
+            _time, lat_2nd, lon_2nd = second
+            cmd2 = f"{cmd_add_gpsdata} --imagefile {imagefile} -- {lat_2nd} {lon_2nd}"
+            print(f"\n    #   cmd to add_gapdata to image file with 2nd best match")
+            print(f"{cmd2}")
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
