@@ -26,6 +26,8 @@ from xml.dom import minidom
 
 app = typer.Typer()
 
+cmd_add_gpsdata = 'python3 ~/git/photoutils/photoutil.py add-gpsdata'
+
 # sematic keys of interest
 semantickeys = ['activity', 'timelineMemory', 'timelinePath', 'visit', 'noMatch']
 codec = 'ISO-8859-1'
@@ -367,7 +369,7 @@ def csv2gpx(infile: str, gpxdir: str='__CSV2GPX'):
     print(f"Created {outfile}")
 
 @app.command()
-def search_csv(time: str, infile: str, info: bool=True):
+def search_csv(time: str, infile: str, info: bool=True, printcmd: bool=False):
     """
     Search closest gps info for specified time in a CSV file/folder
 
@@ -384,7 +386,7 @@ def search_csv(time: str, infile: str, info: bool=True):
         date = ts.strftime("%Y-%m-%d")
         file = f"{infile}/{date}.csv"
         if os.path.exists(file):
-            print(f"\n--- Search {time} in file {file}")
+            print(f"\n--- Search {time} in file\n    {file}")
             points = readcsv(file, info)
         else:
             print(f"!!! File {file} does not exist in folder {infile} !!!")
@@ -393,7 +395,7 @@ def search_csv(time: str, infile: str, info: bool=True):
     else:
         # infile is a proper file
         file = infile
-        print(f"\n--- Search {time} in file {file}")
+        print(f"\n--- Search {time} in file\n    {file}")
         points = readcsv(file, info)
 
     # bisect search
@@ -420,9 +422,25 @@ def search_csv(time: str, infile: str, info: bool=True):
 
     # output
     if best != None:
-        print(f"\nBest match is\n    {matches[best]}\n")
+        # unpack points
+        time_1st, lat_1st, lon_1st = matches[best]
+        print(f"    Best match: {time_1st}")
+        print(f"                    -- {lat_1st} {lon_1st}")
     if second != None:
-        print(f"\n2nd best match is\n    {matches[second]}\n")
+        time_2nd, lat_2nd, lon_2nd = matches[second]
+        print(f"    2nd  match: {time_2nd}")
+        print(f"                    -- {lat_2nd} {lon_2nd}")
+
+    if printcmd:
+        if best != None:
+            cmd1 = f"{cmd_add_gpsdata} --imagefile {infile} -- {lat_1st} {lon_1st}"
+            print(f"    #   cmd to add_gapdata to image file with best match")
+            print(f"{cmd1}")
+        if second != None:
+            cmd2 = f"{cmd_add_gpsdata} --imagefile {infile} -- {lat_2nd} {lon_2nd}"
+            print(f"    #   cmd to add_gapdata to image file with 2nd best match")
+            print(f"{cmd2}")
+
     if best == None and second == None:
         print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
 
@@ -467,7 +485,9 @@ def image_search(imagefile: str, infolder: str, timezone: str):
     print(f"--- imagefile {imagefile}")
     print(f"      tagged with timestamp: {_timestamp}")
     print(f"             from exif dict: {tsSource}")
-    search_csv(timestamp, infolder, False)
+    info = False
+    printcmd = True
+    search_csv(timestamp, infolder, info, printcmd)
 
 @app.command()
 def export(infile: str='Timeline.json', csv: bool=True, gpx: bool=True,
