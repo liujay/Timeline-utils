@@ -411,7 +411,7 @@ def time_search(time: str, infile: str, info: bool=True):
     if len(matches) == 1:
         best = 0
         second = None
-        return matches[best], None
+        return matches[best], second
     elif len(matches) == 2:
         diff1 = abs((datetime.fromisoformat(matches[0][0]) - ts).total_seconds())
         diff2 = abs((datetime.fromisoformat(matches[1][0]) - ts).total_seconds())
@@ -420,7 +420,7 @@ def time_search(time: str, infile: str, info: bool=True):
         return matches[best], matches[second]
     else:
         best = second = None
-        return None, None
+        return best, second
 
 def print_search_results(best, second):
     """
