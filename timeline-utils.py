@@ -463,6 +463,8 @@ def image_search(imagefile: str, infolder: str, timezone: str, printcmd: bool=Tr
     output: a list of 1/2 closet points
 
     """
+    today = datetime.today().strftime('%b%d')
+    scirptfile = f"script-{today}.out"
     #
     #   get exif info from the image
     im = Image.open(imagefile)
@@ -503,6 +505,8 @@ def image_search(imagefile: str, infolder: str, timezone: str, printcmd: bool=Tr
             cmd1 = f"{cmd_add_gpsdata} --imagefile {imagefile} -- {lat_1st} {lon_1st}"
             print(f"\n    #   cmd to add_gapdata to image file with best match")
             print(f"{cmd1}")
+            with open(scirptfile, 'a') as sfile:
+                print(cmd1, file=sfile)
         if second != None:
             _time, lat_2nd, lon_2nd = second
             cmd2 = f"{cmd_add_gpsdata} --imagefile {imagefile} -- {lat_2nd} {lon_2nd}"
