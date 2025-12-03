@@ -422,9 +422,11 @@ def time_search(time: str, infile: str, info: bool=True):
         best = second = None
         return best, second
 
-def print_search_results(best, second):
+def print_search_results(best, second, infile='', script=False, scriptfile=''):
     """
-    
+    print the best and second best search results
+        to stdout and
+        script file if option so
     """
     # output
     if best != None:
@@ -433,12 +435,21 @@ def print_search_results(best, second):
         print()
         print(f"    Best match: {time_1st}")
         print(f"                    -- {lat_1st} {lon_1st}")
+        if script and scriptfile:
+            with open(scriptfile, 'a') as sfile:
+                print("", file=sfile)
+                print(f"#    Best match: {time_1st}", file=sfile)
+                print(f"#                    -- {lat_1st} {lon_1st}", file=sfile)
     if second != None:
         time_2nd, lat_2nd, lon_2nd = second
         print(f"    2nd  match: {time_2nd}")
         print(f"                    -- {lat_2nd} {lon_2nd}")
+        if script and scriptfile:
+            with open(scriptfile, 'a') as sfile:
+                print(f"#    2nd match: {time_2nd}", file=sfile)
+                print(f"#                    -- {lat_2nd} {lon_2nd}", file=sfile)
     if best == None and second == None:
-        print(f"\n!!! Something went wrong in search for {time} in file {infile} !!!\n")
+        print(f"\n!!! Something went wrong in search for file {infile} !!!\n")
     
 @app.command()
 def search_csv(time: str, infile: str, info: bool=True):
@@ -451,7 +462,7 @@ def search_csv(time: str, infile: str, info: bool=True):
 
     """
     best, second = time_search(time, infile, info)
-    print_search_results(best, second)
+    print_search_results(best, second, infile)
 
 @app.command()
 def image_search(imagefile: str, infolder: str, timezone: str, printcmd: bool=True):
@@ -498,7 +509,7 @@ def image_search(imagefile: str, infolder: str, timezone: str, printcmd: bool=Tr
     print(f"             from exif dict: {tsSource}")
     info = False
     best, second = time_search(timestamp, infolder, info)
-    print_search_results(best, second)
+    print_search_results(best, second, imagefile, printcmd, scirptfile)
     if printcmd:
         if best != None:
             _time, lat_1st, lon_1st = best
